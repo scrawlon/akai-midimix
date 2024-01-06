@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Web-MIDI wrapper for AKAI Midimix</title>
+    <script type="module">
+        import { MidiMix, MidiCc, MidiButtons } from "./index.js";
+
+        const midi = new MidiMix();
+        
+        const eventTypeLabel = {
+            "cc": "CC dial/slider",
+            "keydown": "Button" 
+        };
+
+        midi && midi.connect().then(() => {
+            watchMidiConnectionStatus();
+        });
+
+        function watchMidiConnectionStatus() {
+            // Init current state on start up
+            updateMidiConnectionStatusMessage();
+            initButtonState();
+
+            // Watch for changes.
+            midi._input.addEventListener("statechange", () => {
+                updateMidiConnectionStatusMessage();
+                initButtonState();
+            });
+
+            midi.addEventListener("cc", data => {
+                if ( ! MidiCc[data.code] ) {
+                    return;
+                }
+
+                updateLastMidiEventMessage(data);
+            });
+
+            midi.addEventListener("keydown", data => {
+                const button = data.key;
+
+                if ( MidiButtons[data.code] ) {
+                    midi[button] = ! midi[button]; 
+                }
+
+                updateLastMidiEventMessage(data);
+            });
+        }
+
+        function updateMidiConnectionStatusMessage()  {
+            const connectionStatusBlock = document.querySelector(".midi-connection-status");
+
+            if ( ! connectionStatusBlock ) {
+                return;
+            }
+        
+            let status = midi && midi.connected ? "connected" : "disconnected";
+
+            connectionStatusBlock.innerHTML = `Akai Midimix: ${status}`;
+        }
+
+        function initButtonState() {
+            for (const button in MidiButtons) {
+                const buttonState = midi[button];
+
+                // Toggle active buttons to turn on button light
+                if ( buttonState ) {
+                    midi[button] = false;
+                    midi[button] = true;
+                }
+            }
+        }
+
+        function updateLastMidiEventMessage(data) {
+            const lastMidiEventBlock = document.querySelector(".last-midi-event");
+
+            if ( ! lastMidiEventBlock ) {
+                return;
+            }
+
+            const eventType = eventTypeLabel[data.type] || "unkown";
+            let eventValue = data.val || 0 ;
+
+            if ( data.type == "keydown" ) {
+                eventValue = midi[data.key] ? 'on' : 'off';
+                eventValue = data.key === data.code ? eventValue : "pressed";
+            }
+
+            lastMidiEventBlock.innerHTML = `Last Midi Event: ${eventType} ${data.code} - ${eventValue}`;
+            
+            console.log(eventType, data);
+        }
+    </script>
+</head>
+<body>
+    <div class="midi-connection-status">Akai Midimix: disconnected</div>
+    <div class="last-midi-event">Last Midi Event: none</div>
+</body>
+</html>
